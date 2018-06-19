@@ -119,23 +119,6 @@ void main()
         num_samples++;
 
 
-        /*
-        max_val.r = max(color.r, max_val.r);
-        max_val.g = max(color.g, max_val.g);
-        max_val.b = max(color.b, max_val.b);
-        max_val.a = max(color.a, max_val.a);
-
-        min_val.r = min(color.r, min_val.r);
-        min_val.g = min(color.g, min_val.g);
-        min_val.b = min(color.b, min_val.b);
-        min_val.a = min(color.a, min_val.a);
-
-        avg_val.r = (max_val.r+min_val.r)/2;
-        avg_val.g = (max_val.g+min_val.g)/2;
-        avg_val.b = (max_val.b+min_val.b)/2;
-        avg_val.a = (max_val.a+min_val.a)/2;
-        */
-        
         // increment the ray sampling position
         sampling_pos  += ray_increment;
 
@@ -151,6 +134,7 @@ void main()
 #endif
     
 #if TASK == 12 || TASK == 13
+    vec4 dst_val = vec4(0.0,0.0,0.0,0.0);
     // the traversal loop,
     // termination when the sampling position is outside volume boundarys
     // another termination condition for early ray termination is added
@@ -158,10 +142,12 @@ void main()
     {
         // get sample
         float s = get_sample_data(sampling_pos);
+        if(s >= iso_value){
 
-        // dummy code
-        dst = vec4(light_diffuse_color, 1.0);
-
+        vec4 color = texture(transfer_texture, vec2(s, s));
+        
+        dst_val = color;
+        }
         // increment the ray sampling position
         sampling_pos += ray_increment;
 #if TASK == 13 // Binary Search
@@ -177,6 +163,7 @@ void main()
         // update the loop termination condition
         inside_volume = inside_volume_bounds(sampling_pos);
     }
+    dst = dst_val;
 #endif 
 
 #if TASK == 31
