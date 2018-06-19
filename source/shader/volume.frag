@@ -30,6 +30,8 @@ uniform vec3    light_diffuse_color;
 uniform vec3    light_specular_color;
 uniform float   light_ref_coef;
 
+float threshold = 0.000001;
+
 
 bool
 inside_volume_bounds(const in vec3 sampling_position)
@@ -45,6 +47,40 @@ get_sample_data(vec3 in_sampling_pos)
     vec3 obj_to_tex = vec3(1.0) / max_bounds;
     return texture(volume_texture, in_sampling_pos * obj_to_tex).r;
 
+}
+
+vec3 binary_search(vec3 first, vec3 second)
+{
+    float first_sample = get_sample_data(first);
+    float second_sample = get_sample_data(second);
+    float center_sample;
+
+    vec3 center;
+
+    if (second_sample < first_sample) {
+        center = first;
+        first = second;
+        second = center;
+    }
+
+
+    {
+        center = first + (second-first)/2;
+        first_sample = get_sample_data(first);
+        second_sample = get_sample_data(second);
+        center_sample = get_sample_data(center);
+
+        if ((center_sample < iso_value + threshold) || (center_sample > iso_value + threshold)) {
+           return center;
+        } else if (center_sample > iso_value) {
+            second = center;
+        } else {
+            first = center;
+        }
+    } while (first_sample <= second_sample)
+
+    return vec3(0.0,0.0,0.0);
+    
 }
 
 void main()
@@ -134,24 +170,29 @@ void main()
 #endif
     
 #if TASK == 12 || TASK == 13
-    vec4 dst_val = vec4(0.0,0.0,0.0,0.0);
+    dst = vec4(0.0,0.0,0.0,0.0);
+    float s = 0;
     // the traversal loop,
     // termination when the sampling position is outside volume boundarys
     // another termination condition for early ray termination is added
     while (inside_volume)
     {
         // get sample
-        float s = get_sample_data(sampling_pos);
-        if(s >= iso_value){
-
-        vec4 color = texture(transfer_texture, vec2(s, s));
-        
-        dst_val = color;
+        s = get_sample_data(sampling_pos);
+        if(s > iso_value){
+            dst = texture(transfer_texture, vec2(s,s));
+            break;
         }
+
         // increment the ray sampling position
         sampling_pos += ray_increment;
+
 #if TASK == 13 // Binary Search
-        IMPLEMENT;
+        sampling_pos = binary_search(sampling_pos - ray_increment, sampling_pos);
+        s = get_sample_data(sampling_pos);
+        if (sampling_pos == vec3(0.0,0.0,0.0)) {
+            dst = texture(transfer_texture, vec2(s,s));
+        }
 #endif
 #if ENABLE_LIGHTNING == 1 // Add Shading
         IMPLEMENTLIGHT;
@@ -163,7 +204,7 @@ void main()
         // update the loop termination condition
         inside_volume = inside_volume_bounds(sampling_pos);
     }
-    dst = dst_val;
+
 #endif 
 
 #if TASK == 31
