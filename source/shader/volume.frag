@@ -83,6 +83,16 @@ vec3 binary_search(vec3 first, vec3 second)
     
 }
 
+vec3 get_gradient(vec3 position) {
+    vec3 step = max_bounds/volume_dimensions;
+
+    float gradient_x = (get_sample_data(vec3(position.x + step.x, position.yz)) - get_sample_data(vec3(position.x - step.x, position.yz))) / 2;
+    float gradient_y = (get_sample_data(vec3(position.x, position.y + step.y, position.z)) - get_sample_data(vec3(position.x, position.y - step.y, position.z))) / 2;
+    float gradient_z = (get_sample_data(vec3(position.xy, position.z + step.z)) - get_sample_data(vec3(position.xy, position.z - step.z))) / 2;
+
+    return vec3(gradient_x,gradient_y,gradient_z);
+}
+
 void main()
 {
     /// One step trough the volume
@@ -190,12 +200,10 @@ void main()
 #if TASK == 13 // Binary Search
         sampling_pos = binary_search(sampling_pos - ray_increment, sampling_pos);
         s = get_sample_data(sampling_pos);
-        if (sampling_pos == vec3(0.0,0.0,0.0)) {
-            dst = texture(transfer_texture, vec2(s,s));
-        }
+        dst = texture(transfer_texture, vec2(s,s));
 #endif
 #if ENABLE_LIGHTNING == 1 // Add Shading
-        IMPLEMENTLIGHT;
+        vec3 normal = -normalize(get_gradient(sampling_pos));
 #if ENABLE_SHADOWING == 1 // Add Shadows
         IMPLEMENTSHADOW;
 #endif
