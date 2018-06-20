@@ -30,9 +30,6 @@ uniform vec3    light_diffuse_color;
 uniform vec3    light_specular_color;
 uniform float   light_ref_coef;
 
-float threshold = 0.000001;
-
-
 bool
 inside_volume_bounds(const in vec3 sampling_position)
 {
@@ -57,20 +54,22 @@ vec3 binary_search(vec3 first, vec3 second)
 
     vec3 center;
 
+    // swap samples
     if (second_sample < first_sample) {
         center = first;
         first = second;
         second = center;
     }
 
-
+    // subdivide between samples
     {
         center = first + (second-first)/2;
         first_sample = get_sample_data(first);
         second_sample = get_sample_data(second);
         center_sample = get_sample_data(center);
 
-        if ((center_sample < iso_value + threshold) || (center_sample > iso_value + threshold)) {
+        // returns correct pixel (under a certain threshold to prevent endless)
+        if ((center_sample < iso_value) || (center_sample > iso_value)) {
            return center;
         } else if (center_sample > iso_value) {
             second = center;
@@ -85,12 +84,12 @@ vec3 binary_search(vec3 first, vec3 second)
 
 vec3 get_gradient(vec3 position) {
     vec3 step = max_bounds/volume_dimensions;
+    // Dx = ( f(x+1, y, z) - f(x-1, y, z) ) / 2 CENTRAL DIFFERENCE
+    vec3 gradient = vec3((get_sample_data(vec3(position.x + step.x, position.yz)) - get_sample_data(vec3(position.x - step.x, position.yz))) / 2,
+                         (get_sample_data(vec3(position.x, position.y + step.y, position.z)) - get_sample_data(vec3(position.x, position.y - step.y, position.z))) / 2,
+                         (get_sample_data(vec3(position.xy, position.z + step.z)) - get_sample_data(vec3(position.xy, position.z - step.z))) / 2);
 
-    float gradient_x = (get_sample_data(vec3(position.x + step.x, position.yz)) - get_sample_data(vec3(position.x - step.x, position.yz))) / 2;
-    float gradient_y = (get_sample_data(vec3(position.x, position.y + step.y, position.z)) - get_sample_data(vec3(position.x, position.y - step.y, position.z))) / 2;
-    float gradient_z = (get_sample_data(vec3(position.xy, position.z + step.z)) - get_sample_data(vec3(position.xy, position.z - step.z))) / 2;
-
-    return vec3(gradient_x,gradient_y,gradient_z);
+    return gradient;
 }
 
 void main()
@@ -191,8 +190,6 @@ void main()
         s = get_sample_data(sampling_pos);
         if(s > iso_value){
             dst = texture(transfer_texture, vec2(s,s));
-            break;
-        }
 
         // increment the ray sampling position
         sampling_pos += ray_increment;
@@ -200,15 +197,44 @@ void main()
 #if TASK == 13 // Binary Search
         sampling_pos = binary_search(sampling_pos - ray_increment, sampling_pos);
         s = get_sample_data(sampling_pos);
-        dst = texture(transfer_texture, vec2(s,s));
+        if (sampling_pos != vec3(0.0,0.0,0.0)) {
+            dst = texture(transfer_texture, vec2(s,s));
+        }
+
+
 #endif
 #if ENABLE_LIGHTNING == 1 // Add Shading
-        vec3 normal = -normalize(get_gradient(sampling_pos));
-#if ENABLE_SHADOWING == 1 // Add Shadows
-        IMPLEMENTSHADOW;
-#endif
-#endif
+        vec3 normal = normalize(get_gradient(sampling_pos))*-1;
+        vec3 light = normalize(light_position - sampling_pos);
+        float lambertian = max(dot(normal,light),0);
+        float specular = 0.0;
+        if(lambertian > 0.0) {
+            float specularAngle = max(dot(light, normal), 0.0);
+            specular = pow(specularAngle, light_ref_coef);
+        }
 
+        dst = vec4(light_ambient_color + light_diffuse_color.rgb * lambertian + light_specular_color.rgb * specular, 1);
+
+#if ENABLE_SHADOWING == 1 // Add Shadows
+        vec3 light_step = light * sampling_distance;
+        vec3 sh_sample = sampling_pos;
+        while (inside_volume) {
+            sh_sample += light_step;
+
+            s = get_sample_data(sh_sample);
+            float r = get_sample_data(sh_sample + light_step);
+            if((s > iso_value && r < iso_value) || (s < iso_value && r > iso_value)){
+                dst = vec4(0.0,0.0,0.0,1.0);
+                break;
+            }
+            r = s;
+            inside_volume = inside_volume_bounds(sh_sample);
+        }
+#endif
+#endif
+        break;
+    }
+        sampling_pos += ray_increment;
         // update the loop termination condition
         inside_volume = inside_volume_bounds(sampling_pos);
     }
