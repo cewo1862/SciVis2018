@@ -92,6 +92,9 @@ vec3 get_gradient(vec3 position) {
     return gradient;
 }
 
+vec3 back_to_front(vec3 position, vec4 color){    
+    return color.a*color.rgb+(1-color.a)*position;
+}
 void main()
 {
     /// One step trough the volume
@@ -242,27 +245,36 @@ void main()
 #endif 
 
 #if TASK == 31
+
     // the traversal loop,
     // termination when the sampling position is outside volume boundarys
     // another termination condition for early ray termination is added
     while (inside_volume)
     {
-        // get sample
+       
 #if ENABLE_OPACITY_CORRECTION == 1 // Opacity Correction
         IMPLEMENT;
 #else
-        float s = get_sample_data(sampling_pos);
+        
 #endif
-        // dummy code
-        dst = vec4(light_specular_color, 1.0);
+        float s;
+        s = get_sample_data(sampling_pos);
 
-        // increment the ray sampling position
-        sampling_pos += ray_increment;
+        vec4 color = texture(transfer_texture, vec2(s, s));
+
+        sampling_pos = back_to_front(sampling_pos, color);
+        // get sample
+        s = get_sample_data(sampling_pos);
+            
+        dst = texture(transfer_texture, vec2(s,s));
+
+        
 
 #if ENABLE_LIGHTNING == 1 // Add Shading
         IMPLEMENT;
 #endif
-
+        // increment the ray sampling position
+        sampling_pos += ray_increment;
         // update the loop termination condition
         inside_volume = inside_volume_bounds(sampling_pos);
     }
