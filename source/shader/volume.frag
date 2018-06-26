@@ -48,6 +48,8 @@ get_sample_data(vec3 in_sampling_pos)
 
 vec3 binary_search(vec3 first, vec3 second)
 {
+    float epsilon = 0.01;
+
     float first_sample = get_sample_data(first);
     float second_sample = get_sample_data(second);
     float center_sample;
@@ -68,8 +70,7 @@ vec3 binary_search(vec3 first, vec3 second)
         second_sample = get_sample_data(second);
         center_sample = get_sample_data(center);
 
-        // returns correct pixel (under a certain threshold to prevent endless)
-        if ((center_sample < iso_value) || (center_sample > iso_value)) {
+        if ((center_sample < iso_value + epsilon) || (center_sample > iso_value - epsilon)) {
            return center;
         } else if (center_sample > iso_value) {
             second = center;
