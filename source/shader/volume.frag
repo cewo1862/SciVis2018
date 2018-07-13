@@ -30,6 +30,9 @@ uniform vec3    light_diffuse_color;
 uniform vec3    light_specular_color;
 uniform float   light_ref_coef;
 
+
+float epsilon = 0.001;
+
 bool
 inside_volume_bounds(const in vec3 sampling_position)
 {
@@ -48,7 +51,6 @@ get_sample_data(vec3 in_sampling_pos)
 
 vec3 binary_search(vec3 first, vec3 second)
 {
-    float epsilon = 0.01;
 
     float first_sample = get_sample_data(first);
     float second_sample = get_sample_data(second);
@@ -243,6 +245,7 @@ void main()
 
 #endif 
 
+// BACK-TO-FRONT
 #if TASK == 31
 
     while (inside_volume) {
@@ -290,6 +293,39 @@ void main()
         inside_volume = inside_volume_bounds(sampling_pos);
     }
 #endif 
+
+// FRONT-TO-BACK
+#if TASK == 32
+    float transparency = 1.0;
+    while (inside_volume) {
+        float s = get_sample_data(sampling_pos);
+        vec4 color = texture(transfer_texture, vec2(s, s));
+#if ENABLE_OPACITY_CORRECTION == 1 // Opacity Correction
+        color.a = 1 - pow(1-color.a,255*(sampling_distance/sampling_distance_ref));  
+#endif
+#if ENABLE_LIGHTNING == 1 // Add Shading
+        vec3 normal = normalize(get_gradient(sampling_pos))*-1;
+        vec3 light = normalize(light_position - sampling_pos);
+        float lambertian = max(dot(normal,light),0);
+        float specular = 0.0;
+        if(lambertian > 0.0) {
+            float specularAngle = max(dot(light, normal), 0.0);
+            specular = pow(specularAngle, light_ref_coef);
+        }
+
+        color.rgb = color.rgb + light_diffuse_color.rgb * lambertian + light_specular_color.rgb * specular;
+#endif
+        dst.rgb += color.rgb * transparency * color.a;
+        transparency *= 1.0 - color.a;
+        dst.a = 1.0 - transparency;
+        // Early ray termination:  terminate when trans approaches 0.0!
+        if (transparency < epsilon) {break;}
+
+        sampling_pos += ray_increment;
+
+        inside_volume = inside_volume_bounds(sampling_pos);
+    }
+#endif
 
     // return the calculated color value
     FragColor = dst;
